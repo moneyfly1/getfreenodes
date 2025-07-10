@@ -4,10 +4,22 @@ import base64
 import os
 import time
 import random
+import imaplib
+import email as email_lib
+import re
+from email.header import decode_header
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 URLS_FILE = os.path.join(BASE_DIR, 'getnodelist.txt')
 OUTPUT_FILE = os.path.abspath(os.path.join(BASE_DIR, '../nodes/nodes.txt')).replace('自动注册', 'auto_register')
+
+EMAIL = 'moneyflysubssr@gmail.com'
+EMAIL_PASSWORD = 'yjqebywkjiokxarx'
+EMAIL_SMTP = 'smtp.gmail.com'
+EMAIL_IMAP = 'imap.gmail.com'
+EMAIL_LOGIN_PASSWORD = 'yjqebywkjiokxarx'  # 用于IMAP登录
+REGISTER_PASSWORD = 'Sikeming001@'
+ACCOUNTS_FILE = os.path.join(BASE_DIR, 'accounts.txt')
 
 def read_urls(file_path):
     if not os.path.exists(file_path):
@@ -36,14 +48,94 @@ def generate_password():
     chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     return ''.join(random.choice(chars) for _ in range(10))
 
+def fetch_email_code():
+    # 连接 Gmail IMAP
+    mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
+    mail.login(EMAIL, EMAIL_LOGIN_PASSWORD)
+    mail.select('inbox')
+    # 搜索最新邮件
+    result, data = mail.search(None, 'ALL')
+    mail_ids = data[0].split()
+    for eid in reversed(mail_ids[-10:]):  # 只查最近10封
+        result, data = mail.fetch(eid, '(RFC822)')
+        if result != 'OK' or not data or not data[0]:
+            continue
+        # data[0] 结构为 (b'1 (RFC822 {xxx}', bytes)
+        raw_email = data[0][1] if isinstance(data[0], tuple) else data[0]
+        if not isinstance(raw_email, (bytes, bytearray)):
+            continue
+        msg = email_lib.message_from_bytes(raw_email)
+        # 解析主题
+        subject = msg.get('Subject', '')
+        try:
+            dh = decode_header(subject)
+            subject = ''.join([
+                (t.decode(enc or 'utf-8') if isinstance(t, bytes) else t)
+                for t, enc in dh
+            ])
+        except Exception:
+            pass
+        # 只处理含验证码的邮件
+        if '验证码' in subject or 'code' in subject.lower():
+            body = ''
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == 'text/plain':
+                        try:
+                            payload = part.get_payload(decode=True)
+                            if isinstance(payload, bytes):
+                                body = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                            else:
+                                body = str(payload)
+                        except Exception:
+                            body = str(part.get_payload())
+                        break
+            else:
+                try:
+                    payload = msg.get_payload(decode=True)
+                    if isinstance(payload, bytes):
+                        body = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                    else:
+                        body = str(payload)
+                except Exception:
+                    body = str(msg.get_payload())
+            # 提取6位数字验证码
+            match = re.search(r'(\d{6})', body)
+            if match:
+                return match.group(1)
+    return None
+
 def auto_register(session, base_url, email, password):
     register_url = base_url + '/auth/register'
     try:
         page = session.get(register_url)
         html = page.text
         if need_email_code(html):
-            print(f'[register] {register_url} 需要邮箱验证码，跳过注册')
-            return False
+            print(f'[register] {register_url} 需要邮箱验证码，尝试自动获取验证码')
+            # 先提交注册请求，触发验证码发送
+            data = {
+                'email': email,
+                'passwd': password,
+                'repasswd': password,
+                'invite_code': '',
+                'email_code': '',
+            }
+            session.post(register_url, data=data)
+            time.sleep(5)  # 等待邮件到达
+            code = fetch_email_code()
+            if not code:
+                print(f'[register] 未能自动获取验证码，跳过')
+                return False
+            data['email_code'] = code
+            resp = session.post(register_url, data=data)
+            print(f'[register] {register_url} 返回: {resp.text}')
+            try:
+                resp_json = resp.json()
+                if resp.status_code == 200 and resp_json.get('ret') == 1:
+                    return True
+            except Exception:
+                pass
+            return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
         if has_slider_or_cloudflare(html):
             print(f'[register] {register_url} 检测到滑动/Cloudflare验证，尝试自动通过（当前直接跳过）')
             return False
@@ -59,7 +151,6 @@ def auto_register(session, base_url, email, password):
     }
     resp = session.post(register_url, data=data)
     print(f'[register] {register_url} 返回: {resp.text}')
-    # 新增：支持JSON返回的注册成功
     try:
         resp_json = resp.json()
         if resp.status_code == 200 and resp_json.get('ret') == 1:
@@ -162,10 +253,10 @@ def main():
             except Exception as e:
                 print(f'[跳过] 访问 {url} 失败: {e}')
                 continue
-            # 只在 ret == -1 时注册，否则直接跳过注册
+            # 只在 ret == -1 时注册，否则直接登录
+            email = EMAIL
+            password = REGISTER_PASSWORD
             if data.get('ret') == -1:
-                email = generate_gmail()
-                password = generate_password()
                 reg_ok = auto_register(session, base_url, email, password)
                 if reg_ok:
                     login_ok = auto_login(session, base_url, email, password)
@@ -175,6 +266,9 @@ def main():
                             links = process_node_data(data)
                             all_links.extend(links)
                             print(f'[注册+登录+获取] {url} 成功，已添加节点')
+                            # 保存账号信息
+                            with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
+                                f.write(f'{base_url} {email} {password}\n')
                         else:
                             print(f'[失败] {url} 注册和登录成功，但未获取到节点数据')
                     else:
@@ -182,13 +276,21 @@ def main():
                 else:
                     print(f'[失败] {url} 注册失败或需要验证码/Cloudflare')
             else:
-                # 只处理 ret==1 的情况
-                if data.get('ret') == 1:
-                    links = process_node_data(data)
-                    all_links.extend(links)
-                    print(f'[获取] {url} 成功，已添加节点')
+                # 只处理 ret==1 的情况，直接登录
+                login_ok = auto_login(session, base_url, email, password)
+                if login_ok:
+                    data = get_nodes(session, base_url)
+                    if data and data.get('ret') == 1:
+                        links = process_node_data(data)
+                        all_links.extend(links)
+                        print(f'[登录+获取] {url} 成功，已添加节点')
+                        # 保存账号信息
+                        with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
+                            f.write(f'{base_url} {email} {password}\n')
+                    else:
+                        print(f'[失败] {url} 登录成功，但未获取到节点数据')
                 else:
-                    print(f'[跳过] {url} 未返回有效节点(ret!=1)')
+                    print(f'[失败] {url} 登录失败')
         # 保存所有节点到 nodes/nodes.txt
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
