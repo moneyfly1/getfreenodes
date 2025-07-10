@@ -295,6 +295,9 @@ def main():
                 else:
                     print(f'[失败] {url} 登录失败')
         # 保存所有节点到 nodes/nodes.txt
+        print(f'准备写入 {len(all_links)} 条节点到 {OUTPUT_FILE}')
+        if all_links:
+            print('部分节点内容示例:', all_links[:2])
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
             f.write('\n'.join(all_links))
