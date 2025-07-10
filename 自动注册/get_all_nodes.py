@@ -32,6 +32,10 @@ def has_slider_or_cloudflare(html_text):
 def generate_gmail():
     return f'auto{int(time.time())%100000}{random.randint(100,999)}@gmail.com'
 
+def generate_password():
+    chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    return ''.join(random.choice(chars) for _ in range(10))
+
 def auto_register(session, base_url, email, password):
     register_url = base_url + '/auth/register'
     try:
@@ -139,26 +143,36 @@ def main():
             session = requests.Session()
             try:
                 resp = session.get(url, timeout=10)
+                try:
+                    data = resp.json()
+                except Exception as e:
+                    print(f'[跳过] {url} 返回内容不是JSON: {e}')
+                    continue
             except Exception as e:
                 print(f'[跳过] 访问 {url} 失败: {e}')
                 continue
-            try:
-                data = resp.json()
-            except Exception:
-                data = {}
+            # 只在 ret == -1 时注册，否则直接跳过注册
             if data.get('ret') == -1:
                 email = generate_gmail()
-                password = 'Test123456'
+                password = generate_password()
                 if auto_register(session, base_url, email, password):
-                    auto_login(session, base_url, email, password)
-                    data = get_nodes(session, base_url)
+                    if auto_login(session, base_url, email, password):
+                        data = get_nodes(session, base_url)
+                        links = process_node_data(data)
+                        all_links.extend(links)
+                        print(f'[注册+获取] {url} 成功，已添加节点')
+                    else:
+                        print(f'[跳过] {url} 登录失败')
                 else:
-                    print(f'跳过 {url} 的注册')
-                    continue
+                    print(f'[跳过] {url} 注册失败或需要验证码/Cloudflare')
             else:
-                data = get_nodes(session, base_url)
-            links = process_node_data(data)
-            all_links.extend(links)
+                # 只处理 ret==1 的情况
+                if data.get('ret') == 1:
+                    links = process_node_data(data)
+                    all_links.extend(links)
+                    print(f'[获取] {url} 成功，已添加节点')
+                else:
+                    print(f'[跳过] {url} 未返回有效节点(ret!=1)')
         # 保存所有节点到 nodes/nodes.txt
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -166,7 +180,7 @@ def main():
         print(f'已保存 {len(all_links)} 条节点到 {OUTPUT_FILE}')
     except Exception as e:
         print(f'运行出错: {e}')
-        exit(1)
+        # 不再 exit(1)，而是继续
 
 if __name__ == '__main__':
     main() 
