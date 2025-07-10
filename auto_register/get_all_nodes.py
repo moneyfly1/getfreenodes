@@ -11,7 +11,7 @@ from email.header import decode_header
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 URLS_FILE = os.path.join(BASE_DIR, 'getnodelist.txt')
-OUTPUT_FILE = os.path.join(BASE_DIR, 'nodes', 'nodes.txt')
+OUTPUT_FILE = os.path.abspath(os.path.join(BASE_DIR, '../nodes/nodes.txt')).replace('自动注册', 'auto_register')
 
 EMAIL = 'moneyflysubssr@gmail.com'
 EMAIL_PASSWORD = 'yjqebywkjiokxarx'
@@ -133,10 +133,6 @@ def auto_register(session, base_url, email, password):
                 resp_json = resp.json()
                 if resp.status_code == 200 and resp_json.get('ret') == 1:
                     return True
-                # 新增：如果提示已注册，直接返回特殊标记
-                if resp_json.get('msg') and ('已注册' in resp_json.get('msg') or '已经注册' in resp_json.get('msg')):
-                    print(f'[register] {register_url} 邮箱已注册，直接登录')
-                    return 'already_registered'
             except Exception:
                 pass
             return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
@@ -159,10 +155,6 @@ def auto_register(session, base_url, email, password):
         resp_json = resp.json()
         if resp.status_code == 200 and resp_json.get('ret') == 1:
             return True
-        # 新增：如果提示已注册，直接返回特殊标记
-        if resp_json.get('msg') and ('已注册' in resp_json.get('msg') or '已经注册' in resp_json.get('msg')):
-            print(f'[register] {register_url} 邮箱已注册，直接登录')
-            return 'already_registered'
     except Exception:
         pass
     return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
@@ -222,11 +214,8 @@ def process_node_data(data):
             net = server_parts[3] if len(server_parts) > 3 else 'ws'
             host = ''
             path = ''
-            # 优先使用 outside_port
             if len(server_parts) > 5 and server_parts[5]:
                 for part in server_parts[5].split('|'):
-                    if part.startswith('outside_port='):
-                        port = part.split('=')[1]
                     if part.startswith('path='):
                         path = part[5:]
                     elif part.startswith('host='):
@@ -271,8 +260,8 @@ def main():
             email = EMAIL
             password = REGISTER_PASSWORD
             if data.get('ret') == -1:
-                reg_result = auto_register(session, base_url, email, password)
-                if reg_result is True:
+                reg_ok = auto_register(session, base_url, email, password)
+                if reg_ok:
                     login_ok = auto_login(session, base_url, email, password)
                     if login_ok:
                         data = get_nodes(session, base_url)
@@ -287,22 +276,6 @@ def main():
                             print(f'[失败] {url} 注册和登录成功，但未获取到节点数据')
                     else:
                         print(f'[失败] {url} 注册成功，但登录失败')
-                elif reg_result == 'already_registered':
-                    print(f'[注册] {url} 邮箱已注册，自动登录')
-                    login_ok = auto_login(session, base_url, email, password)
-                    if login_ok:
-                        data = get_nodes(session, base_url)
-                        if data and data.get('ret') == 1:
-                            links = process_node_data(data)
-                            all_links.extend(links)
-                            print(f'[登录+获取] {url} 成功，已添加节点')
-                            # 保存账号信息
-                            with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
-                                f.write(f'{base_url} {email} {password}\n')
-                        else:
-                            print(f'[失败] {url} 登录成功，但未获取到节点数据')
-                    else:
-                        print(f'[失败] {url} 登录失败')
                 else:
                     print(f'[失败] {url} 注册失败或需要验证码/Cloudflare')
             else:
@@ -322,9 +295,6 @@ def main():
                 else:
                     print(f'[失败] {url} 登录失败')
         # 保存所有节点到 nodes/nodes.txt
-        print(f'准备写入 {len(all_links)} 条节点到 {OUTPUT_FILE}')
-        if all_links:
-            print('部分节点内容示例:', all_links[:2])
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
             f.write('\n'.join(all_links))
