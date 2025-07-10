@@ -133,6 +133,10 @@ def auto_register(session, base_url, email, password):
                 resp_json = resp.json()
                 if resp.status_code == 200 and resp_json.get('ret') == 1:
                     return True
+                # 新增：如果提示已注册，直接返回特殊标记
+                if resp_json.get('msg') and ('已注册' in resp_json.get('msg') or '已经注册' in resp_json.get('msg')):
+                    print(f'[register] {register_url} 邮箱已注册，直接登录')
+                    return 'already_registered'
             except Exception:
                 pass
             return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
@@ -155,6 +159,10 @@ def auto_register(session, base_url, email, password):
         resp_json = resp.json()
         if resp.status_code == 200 and resp_json.get('ret') == 1:
             return True
+        # 新增：如果提示已注册，直接返回特殊标记
+        if resp_json.get('msg') and ('已注册' in resp_json.get('msg') or '已经注册' in resp_json.get('msg')):
+            print(f'[register] {register_url} 邮箱已注册，直接登录')
+            return 'already_registered'
     except Exception:
         pass
     return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
@@ -260,8 +268,8 @@ def main():
             email = EMAIL
             password = REGISTER_PASSWORD
             if data.get('ret') == -1:
-                reg_ok = auto_register(session, base_url, email, password)
-                if reg_ok:
+                reg_result = auto_register(session, base_url, email, password)
+                if reg_result is True:
                     login_ok = auto_login(session, base_url, email, password)
                     if login_ok:
                         data = get_nodes(session, base_url)
@@ -276,6 +284,22 @@ def main():
                             print(f'[失败] {url} 注册和登录成功，但未获取到节点数据')
                     else:
                         print(f'[失败] {url} 注册成功，但登录失败')
+                elif reg_result == 'already_registered':
+                    print(f'[注册] {url} 邮箱已注册，自动登录')
+                    login_ok = auto_login(session, base_url, email, password)
+                    if login_ok:
+                        data = get_nodes(session, base_url)
+                        if data and data.get('ret') == 1:
+                            links = process_node_data(data)
+                            all_links.extend(links)
+                            print(f'[登录+获取] {url} 成功，已添加节点')
+                            # 保存账号信息
+                            with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
+                                f.write(f'{base_url} {email} {password}\n')
+                        else:
+                            print(f'[失败] {url} 登录成功，但未获取到节点数据')
+                    else:
+                        print(f'[失败] {url} 登录失败')
                 else:
                     print(f'[失败] {url} 注册失败或需要验证码/Cloudflare')
             else:
