@@ -5,16 +5,18 @@ import os
 import time
 import random
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+URLS_FILE = os.path.join(BASE_DIR, 'getnodelist.txt')
+OUTPUT_FILE = os.path.join(BASE_DIR, '../nodes/nodes.txt')
+
 def read_urls(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return [line.strip() for line in f if line.strip()]
 
 def need_email_code(html_text):
-    # 简单判断是否有邮箱验证码字段
     return 'email_code' in html_text or '邮箱验证码' in html_text
 
 def has_slider_or_cloudflare(html_text):
-    # 检查是否有滑动验证、Cloudflare等
     keywords = ['slider', 'geetest', 'cloudflare', 'cf-challenge', '验证码']
     return any(kw in html_text.lower() for kw in keywords)
 
@@ -23,7 +25,6 @@ def generate_gmail():
 
 def auto_register(session, base_url, email, password):
     register_url = base_url + '/auth/register'
-    # 先获取注册页面内容
     try:
         page = session.get(register_url)
         html = page.text
@@ -80,7 +81,6 @@ def process_node_data(data):
     method = user_info['method']
     for node in nodeinfo['nodes']:
         raw_node = node['raw_node']
-        # SS节点
         if ';port=' in raw_node['server']:
             server = raw_node['server'].split(';port=')[0]
             port = raw_node['server'].split('#')[1]
@@ -88,14 +88,12 @@ def process_node_data(data):
             ss_link_encoded = base64.b64encode(ss_link.encode()).decode()
             final_link = f'ss://{ss_link_encoded}#{raw_node["name"]}'
             links.append(final_link)
-        # VMESS节点
         elif raw_node['server'].count(';') >= 3:
             server_parts = raw_node['server'].split(';')
             server = server_parts[0]
             port = server_parts[1]
             aid = server_parts[2] if len(server_parts) > 2 else '64'
             net = server_parts[3] if len(server_parts) > 3 else 'ws'
-            # 解析path和host
             host = ''
             path = ''
             if len(server_parts) > 5 and server_parts[5]:
@@ -123,7 +121,7 @@ def process_node_data(data):
     return links
 
 def main():
-    urls = read_urls('自动注册/getnodelist.txt')
+    urls = read_urls(URLS_FILE)
     all_links = []
     for url in urls:
         print(f'处理: {url}')
@@ -147,12 +145,11 @@ def main():
             data = get_nodes(session, base_url)
         links = process_node_data(data)
         all_links.extend(links)
-    # 保存所有节点
-    output_file = 'nodes/nodes.txt'
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    with open(output_file, 'w', encoding='utf-8') as f:
+    # 保存所有节点到 nodes/nodes.txt
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write('\n'.join(all_links))
-    print(f'已保存 {len(all_links)} 条节点到 {output_file}')
+    print(f'已保存 {len(all_links)} 条节点到 {OUTPUT_FILE}')
 
 if __name__ == '__main__':
     main() 
