@@ -302,7 +302,7 @@ def main():
                         else:
                             print(f'[失败] {url} 登录成功，但未获取到节点数据')
                     else:
-                        print(f'[失败] {url} 登录失败')
+                        print(f'[失败] {url} 邮箱已注册但登录失败，不采集节点')
                 else:
                     print(f'[失败] {url} 注册失败或需要验证码/Cloudflare')
             else:
