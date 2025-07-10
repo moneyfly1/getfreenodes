@@ -28,12 +28,16 @@ jobs:
     - name: Run scraper
       run: python auto_register/get_all_nodes.py
 
-    - name: Commit changes
+    - name: Set up git for push
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+
+    - name: Commit and push changes
+      run: |
         git add auto_register/nodes/nodes.txt
-        git commit -m 'Auto update nodes list'
+        git commit -m 'Auto update nodes list' || echo "No changes to commit"
         git push
 
 
