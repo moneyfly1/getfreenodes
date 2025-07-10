@@ -59,6 +59,13 @@ def auto_register(session, base_url, email, password):
     }
     resp = session.post(register_url, data=data)
     print(f'[register] {register_url} 返回: {resp.text}')
+    # 新增：支持JSON返回的注册成功
+    try:
+        resp_json = resp.json()
+        if resp.status_code == 200 and resp_json.get('ret') == 1:
+            return True
+    except Exception:
+        pass
     return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
 
 def auto_login(session, base_url, email, password):
@@ -70,7 +77,11 @@ def auto_login(session, base_url, email, password):
     }
     resp = session.post(login_url, data=data)
     print(f'[login] {login_url} 返回: {resp.text}')
-    return resp.status_code == 200
+    try:
+        resp_json = resp.json()
+        return resp.status_code == 200 and resp_json.get('ret') == 1
+    except Exception:
+        return resp.status_code == 200 and ('成功' in resp.text or '登录成功' in resp.text)
 
 def get_nodes(session, base_url):
     node_url = base_url + '/getnodelist'
@@ -155,16 +166,21 @@ def main():
             if data.get('ret') == -1:
                 email = generate_gmail()
                 password = generate_password()
-                if auto_register(session, base_url, email, password):
-                    if auto_login(session, base_url, email, password):
+                reg_ok = auto_register(session, base_url, email, password)
+                if reg_ok:
+                    login_ok = auto_login(session, base_url, email, password)
+                    if login_ok:
                         data = get_nodes(session, base_url)
-                        links = process_node_data(data)
-                        all_links.extend(links)
-                        print(f'[注册+获取] {url} 成功，已添加节点')
+                        if data and data.get('ret') == 1:
+                            links = process_node_data(data)
+                            all_links.extend(links)
+                            print(f'[注册+登录+获取] {url} 成功，已添加节点')
+                        else:
+                            print(f'[失败] {url} 注册和登录成功，但未获取到节点数据')
                     else:
-                        print(f'[跳过] {url} 登录失败')
+                        print(f'[失败] {url} 注册成功，但登录失败')
                 else:
-                    print(f'[跳过] {url} 注册失败或需要验证码/Cloudflare')
+                    print(f'[失败] {url} 注册失败或需要验证码/Cloudflare')
             else:
                 # 只处理 ret==1 的情况
                 if data.get('ret') == 1:
