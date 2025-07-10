@@ -275,9 +275,15 @@ def main():
                 if reg_result is True or reg_result == 'already_registered':
                     login_ok = auto_login(session, base_url, email, password)
                     if login_ok:
-                        data = get_nodes(session, base_url)
-                        if data and data.get('ret') == 1:
-                            links = process_node_data(data)
+                        # 登录后再访问 getnodelist 接口（用同一个 session）
+                        try:
+                            resp2 = session.get(url, timeout=10)
+                            data2 = resp2.json()
+                        except Exception as e:
+                            print(f'[跳过] 登录后访问 {url} 失败: {e}')
+                            data2 = None
+                        if data2 and data2.get('ret') == 1:
+                            links = process_node_data(data2)
                             all_links.extend(links)
                             print(f'[登录+获取] {url} 成功，已添加节点')
                             # 保存账号信息
