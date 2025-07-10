@@ -40,33 +40,5 @@ jobs:
 permissions:
   contents: write
 
-on:
-  schedule:
-    - cron: '0 */6 * * *'  # 每6小时运行一次
-  workflow_dispatch:
-
-jobs:
-  update-nodes:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: pip install -r auto_register/requirements.txt
-
-      - name: Run node update script
-        run: python auto_register/get_all_nodes.py
-
-      - name: Commit and push changes
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add auto_register/nodes/nodes.txt
-          git commit -m "Update nodes $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
-          git push
+env:
+  TZ: UTC
