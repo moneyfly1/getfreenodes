@@ -3,7 +3,7 @@
 本项目实现了自动化注册、登录、节点信息采集与协议组合，并自动同步到 GitHub。
 
 ## 功能简介
-- 自动读取 `自动注册/getnodelist.txt` 中的节点获取网址
+- 自动读取 `auto_register/getnodelist.txt` 中的节点获取网址
 - 检测节点接口返回值，自动注册账号（优先 Gmail，遇到邮箱/滑动/Cloudflare 验证自动跳过）
 - 登录并获取节点数据，自动组合成 SS/VMess 等协议链接
 - 节点信息输出到 `nodes/nodes.txt`
@@ -12,7 +12,7 @@
 
 ## 目录结构
 ```
-自动注册/
+auto_register/
   get_all_nodes.py         # 主脚本，自动注册/登录/采集/组合节点
   getnodelist.txt          # 节点获取接口列表（每行一个）
   requirements.txt         # 依赖
@@ -25,8 +25,8 @@ README.md                  # 项目说明
 ```
 
 ## 使用方法
-1. 在 `自动注册/getnodelist.txt` 填写节点获取接口，每行一个
-2. 运行 `python 自动注册/get_all_nodes.py` 自动采集节点
+1. 在 `auto_register/getnodelist.txt` 填写节点获取接口，每行一个
+2. 运行 `python auto_register/get_all_nodes.py` 自动采集节点
 3. 节点信息会输出到 `nodes/nodes.txt`
 4. 通过 `git add . && git commit -m "xxx" && git push` 可同步所有更改到 GitHub
 5. GitHub Actions 会定时自动运行并推送最新节点
