@@ -7,11 +7,20 @@ import random
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 URLS_FILE = os.path.join(BASE_DIR, 'getnodelist.txt')
-OUTPUT_FILE = os.path.join(BASE_DIR, '../nodes/nodes.txt')
+OUTPUT_FILE = os.path.abspath(os.path.join(BASE_DIR, '../nodes/nodes.txt'))
 
 def read_urls(file_path):
+    if not os.path.exists(file_path):
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('')
+        print(f'未找到 {file_path}，已自动创建空文件，请填写节点接口后重新运行。')
+        exit(1)
     with open(file_path, 'r', encoding='utf-8') as f:
-        return [line.strip() for line in f if line.strip()]
+        lines = [line.strip() for line in f if line.strip()]
+    if not lines:
+        print(f'{file_path} 为空，请填写节点接口后重新运行。')
+        exit(1)
+    return lines
 
 def need_email_code(html_text):
     return 'email_code' in html_text or '邮箱验证码' in html_text
@@ -121,35 +130,39 @@ def process_node_data(data):
     return links
 
 def main():
-    urls = read_urls(URLS_FILE)
-    all_links = []
-    for url in urls:
-        print(f'处理: {url}')
-        base_url = url.split('/getnodelist')[0]
-        session = requests.Session()
-        resp = session.get(url)
-        try:
-            data = resp.json()
-        except Exception:
-            data = {}
-        if data.get('ret') == -1:
-            email = generate_gmail()
-            password = 'Test123456'
-            if auto_register(session, base_url, email, password):
-                auto_login(session, base_url, email, password)
-                data = get_nodes(session, base_url)
+    try:
+        urls = read_urls(URLS_FILE)
+        all_links = []
+        for url in urls:
+            print(f'处理: {url}')
+            base_url = url.split('/getnodelist')[0]
+            session = requests.Session()
+            resp = session.get(url)
+            try:
+                data = resp.json()
+            except Exception:
+                data = {}
+            if data.get('ret') == -1:
+                email = generate_gmail()
+                password = 'Test123456'
+                if auto_register(session, base_url, email, password):
+                    auto_login(session, base_url, email, password)
+                    data = get_nodes(session, base_url)
+                else:
+                    print(f'跳过 {url} 的注册')
+                    continue
             else:
-                print(f'跳过 {url} 的注册')
-                continue
-        else:
-            data = get_nodes(session, base_url)
-        links = process_node_data(data)
-        all_links.extend(links)
-    # 保存所有节点到 nodes/nodes.txt
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(all_links))
-    print(f'已保存 {len(all_links)} 条节点到 {OUTPUT_FILE}')
+                data = get_nodes(session, base_url)
+            links = process_node_data(data)
+            all_links.extend(links)
+        # 保存所有节点到 nodes/nodes.txt
+        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(all_links))
+        print(f'已保存 {len(all_links)} 条节点到 {OUTPUT_FILE}')
+    except Exception as e:
+        print(f'运行出错: {e}')
+        exit(1)
 
 if __name__ == '__main__':
     main() 
