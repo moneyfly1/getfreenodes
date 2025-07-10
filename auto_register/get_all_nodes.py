@@ -272,23 +272,7 @@ def main():
             password = REGISTER_PASSWORD
             if data.get('ret') == -1:
                 reg_result = auto_register(session, base_url, email, password)
-                if reg_result is True:
-                    login_ok = auto_login(session, base_url, email, password)
-                    if login_ok:
-                        data = get_nodes(session, base_url)
-                        if data and data.get('ret') == 1:
-                            links = process_node_data(data)
-                            all_links.extend(links)
-                            print(f'[注册+登录+获取] {url} 成功，已添加节点')
-                            # 保存账号信息
-                            with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
-                                f.write(f'{base_url} {email} {password}\n')
-                        else:
-                            print(f'[失败] {url} 注册和登录成功，但未获取到节点数据')
-                    else:
-                        print(f'[失败] {url} 注册成功，但登录失败')
-                elif reg_result == 'already_registered':
-                    print(f'[注册] {url} 邮箱已注册，自动登录')
+                if reg_result is True or reg_result == 'already_registered':
                     login_ok = auto_login(session, base_url, email, password)
                     if login_ok:
                         data = get_nodes(session, base_url)
