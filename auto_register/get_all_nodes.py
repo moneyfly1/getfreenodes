@@ -191,9 +191,12 @@ def process_node_data(data):
         user_info = nodeinfo['nodes_muport'][0]['user']
     else:
         user_info = nodeinfo['user']
-    uuid = user_info['uuid']
-    ss_password = user_info['passwd']
-    method = user_info['method']
+    uuid = user_info.get('uuid')
+    ss_password = user_info.get('passwd')
+    method = user_info.get('method')
+    if not uuid:
+        print('[警告] user_info 缺少 uuid 字段，跳过该节点')
+        return links
     for node in nodeinfo['nodes']:
         raw_node = node['raw_node']
         if ';port=' in raw_node['server']:
