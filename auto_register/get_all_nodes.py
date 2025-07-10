@@ -11,7 +11,7 @@ from email.header import decode_header
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 URLS_FILE = os.path.join(BASE_DIR, 'getnodelist.txt')
-OUTPUT_FILE = os.path.abspath(os.path.join(BASE_DIR, '../nodes/nodes.txt')).replace('自动注册', 'auto_register')
+OUTPUT_FILE = os.path.join(BASE_DIR, 'nodes', 'nodes.txt')
 
 EMAIL = 'moneyflysubssr@gmail.com'
 EMAIL_PASSWORD = 'yjqebywkjiokxarx'
