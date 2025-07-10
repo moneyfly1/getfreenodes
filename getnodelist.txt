@@ -1,4 +1,3 @@
-url
 https://ss.mugua.one/getnodelist
 https://www.mjjspeed.com/getnodelist
 https://worldnod.top/getnodelist
