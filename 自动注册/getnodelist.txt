@@ -1,0 +1,10 @@
+https://test1.example.com/getnodelist
+https://test2.example.com/getnodelist
+https://test3.example.com/getnodelist
+https://test4.example.com/getnodelist
+https://test5.example.com/getnodelist
+https://test6.example.com/getnodelist
+https://test7.example.com/getnodelist
+https://test8.example.com/getnodelist
+https://test9.example.com/getnodelist
+https://test10.example.com/getnodelist 

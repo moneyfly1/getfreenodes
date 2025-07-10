@@ -137,7 +137,11 @@ def main():
             print(f'处理: {url}')
             base_url = url.split('/getnodelist')[0]
             session = requests.Session()
-            resp = session.get(url)
+            try:
+                resp = session.get(url, timeout=10)
+            except Exception as e:
+                print(f'[跳过] 访问 {url} 失败: {e}')
+                continue
             try:
                 data = resp.json()
             except Exception:
