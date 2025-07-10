@@ -222,8 +222,11 @@ def process_node_data(data):
             net = server_parts[3] if len(server_parts) > 3 else 'ws'
             host = ''
             path = ''
+            # 优先使用 outside_port
             if len(server_parts) > 5 and server_parts[5]:
                 for part in server_parts[5].split('|'):
+                    if part.startswith('outside_port='):
+                        port = part.split('=')[1]
                     if part.startswith('path='):
                         path = part[5:]
                     elif part.startswith('host='):
