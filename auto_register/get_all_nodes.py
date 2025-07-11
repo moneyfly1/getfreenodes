@@ -14,6 +14,10 @@ ACCOUNTS_FILE = os.path.join(BASE_DIR, 'registered_accounts.txt')
 # 统一密码
 UNIFIED_PASSWORD = 'Sikeming001@'
 
+# 添加重试配置
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
 def read_urls(file_path):
     if not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -60,6 +64,31 @@ def save_account_info(website_url, email, password, status):
     except Exception as e:
         print(f'[保存账号] 保存账号信息失败: {e}')
 
+def safe_request(session, url, method='GET', data=None, timeout=10, max_retries=MAX_RETRIES):
+    """安全的网络请求，带重试机制"""
+    for attempt in range(max_retries):
+        try:
+            if method.upper() == 'GET':
+                response = session.get(url, timeout=timeout)
+            else:
+                response = session.post(url, data=data, timeout=timeout)
+            return response
+        except requests.exceptions.Timeout:
+            print(f'[网络请求] 第{attempt+1}次请求超时: {url}')
+            if attempt < max_retries - 1:
+                time.sleep(RETRY_DELAY)
+                continue
+            else:
+                raise
+        except requests.exceptions.RequestException as e:
+            print(f'[网络请求] 第{attempt+1}次请求失败: {url} - {e}')
+            if attempt < max_retries - 1:
+                time.sleep(RETRY_DELAY)
+                continue
+            else:
+                raise
+    return None
+
 def auto_register(session, base_url, email, password):
     register_url = base_url + '/auth/register'
     print(f'[注册] 开始注册: {register_url}')
@@ -67,7 +96,10 @@ def auto_register(session, base_url, email, password):
     print(f'[注册] 使用密码: {password}')
     
     try:
-        page = session.get(register_url)
+        page = safe_request(session, register_url)
+        if page is None:
+            return False
+            
         html = page.text
         if need_email_code(html):
             print(f'[注册] {register_url} 需要邮箱验证码，跳过注册')
@@ -88,26 +120,33 @@ def auto_register(session, base_url, email, password):
     }
     
     print(f'[注册] 发送注册请求...')
-    resp = session.post(register_url, data=data)
-    print(f'[注册] {register_url} 返回状态码: {resp.status_code}')
-    print(f'[注册] {register_url} 返回内容: {resp.text}')
-    
-    # 新增：支持JSON返回的注册成功
     try:
-        resp_json = resp.json()
-        if resp.status_code == 200 and resp_json.get('ret') == 1:
-            print(f'[注册] 注册成功 (JSON响应)')
-            return True
-    except Exception:
-        pass
-    
-    success = resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
-    if success:
-        print(f'[注册] 注册成功 (文本响应)')
-    else:
-        print(f'[注册] 注册失败')
-    
-    return success
+        resp = safe_request(session, register_url, method='POST', data=data)
+        if resp is None:
+            return False
+            
+        print(f'[注册] {register_url} 返回状态码: {resp.status_code}')
+        print(f'[注册] {register_url} 返回内容: {resp.text}')
+        
+        # 新增：支持JSON返回的注册成功
+        try:
+            resp_json = resp.json()
+            if resp.status_code == 200 and resp_json.get('ret') == 1:
+                print(f'[注册] 注册成功 (JSON响应)')
+                return True
+        except Exception:
+            pass
+        
+        success = resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
+        if success:
+            print(f'[注册] 注册成功 (文本响应)')
+        else:
+            print(f'[注册] 注册失败')
+        
+        return success
+    except Exception as e:
+        print(f'[注册] 注册请求失败: {e}')
+        return False
 
 def auto_login(session, base_url, email, password):
     login_url = base_url + '/auth/login'
@@ -121,41 +160,55 @@ def auto_login(session, base_url, email, password):
     }
     
     print(f'[登录] 发送登录请求...')
-    resp = session.post(login_url, data=data)
-    print(f'[登录] {login_url} 返回状态码: {resp.status_code}')
-    print(f'[登录] {login_url} 返回内容: {resp.text}')
-    
     try:
-        resp_json = resp.json()
-        success = resp.status_code == 200 and resp_json.get('ret') == 1
-        if success:
-            print(f'[登录] 登录成功 (JSON响应)')
-        else:
-            print(f'[登录] 登录失败 (JSON响应)')
-        return success
-    except Exception:
-        success = resp.status_code == 200 and ('成功' in resp.text or '登录成功' in resp.text)
-        if success:
-            print(f'[登录] 登录成功 (文本响应)')
-        else:
-            print(f'[登录] 登录失败 (文本响应)')
-        return success
+        resp = safe_request(session, login_url, method='POST', data=data)
+        if resp is None:
+            return False
+            
+        print(f'[登录] {login_url} 返回状态码: {resp.status_code}')
+        print(f'[登录] {login_url} 返回内容: {resp.text}')
+        
+        try:
+            resp_json = resp.json()
+            success = resp.status_code == 200 and resp_json.get('ret') == 1
+            if success:
+                print(f'[登录] 登录成功 (JSON响应)')
+            else:
+                print(f'[登录] 登录失败 (JSON响应)')
+            return success
+        except Exception:
+            success = resp.status_code == 200 and ('成功' in resp.text or '登录成功' in resp.text)
+            if success:
+                print(f'[登录] 登录成功 (文本响应)')
+            else:
+                print(f'[登录] 登录失败 (文本响应)')
+            return success
+    except Exception as e:
+        print(f'[登录] 登录请求失败: {e}')
+        return False
 
 def get_nodes(session, base_url):
     node_url = base_url + '/getnodelist'
     print(f'[获取节点] 请求节点列表: {node_url}')
     
-    resp = session.get(node_url)
-    print(f'[获取节点] {node_url} 返回状态码: {resp.status_code}')
-    print(f'[获取节点] {node_url} 返回内容: {resp.text[:200]}...')
-    
-    if resp.status_code == 200:
-        try:
-            return resp.json()
-        except Exception as e:
-            print(f'[获取节点] JSON解析失败: {e}')
+    try:
+        resp = safe_request(session, node_url)
+        if resp is None:
             return None
-    return None
+            
+        print(f'[获取节点] {node_url} 返回状态码: {resp.status_code}')
+        print(f'[获取节点] {node_url} 返回内容: {resp.text[:200]}...')
+        
+        if resp.status_code == 200:
+            try:
+                return resp.json()
+            except Exception as e:
+                print(f'[获取节点] JSON解析失败: {e}')
+                return None
+        return None
+    except Exception as e:
+        print(f'[获取节点] 请求失败: {e}')
+        return None
 
 def process_node_data(data):
     links = []
@@ -376,8 +429,15 @@ def main():
                 base_url = url.split('/getnodelist')[0]
                 session = requests.Session()
                 
+                # 使用更长的超时时间进行请求
+                
                 try:
-                    resp = session.get(url, timeout=10)
+                    resp = safe_request(session, url, timeout=15)
+                    if resp is None:
+                        print(f'[跳过] 访问 {url} 失败，网络请求超时或连接失败')
+                        save_account_info(url, '', '', '跳过-网络请求失败')
+                        continue
+                        
                     try:
                         data = resp.json()
                     except Exception as e:
