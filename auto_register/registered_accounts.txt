@@ -1,0 +1,8 @@
+=== 自动注册账号记录 ===
+开始时间: 2025-07-11 01:19:26
+统一密码: Sikeming001@
+格式: 时间 | 网址 | 邮箱 | 密码 | 状态
+==================================================
+时间: 2025-07-11 01:19:29 | 网址: https://xixicats.pw/getnodelist | 邮箱: 0nnt6m2q105@gmail.com | 密码: Sikeming001@ | 状态: 成功-注册+登录+获取节点
+时间: 2025-07-11 01:19:39 | 网址: https://www.heduian.asia/getnodelist | 邮箱: uwje8j52mgcv952@gmail.com | 密码: Sikeming001@ | 状态: 成功-注册+登录+获取节点
+时间: 2025-07-11 01:19:40 | 网址: https://52vpn.cc/getnodelist | 邮箱: 7hdkem8vfi966@gmail.com | 密码: Sikeming001@ | 状态: 失败-注册失败或需要验证
