@@ -4,22 +4,15 @@ import base64
 import os
 import time
 import random
-import imaplib
-import email as email_lib
-import re
-from email.header import decode_header
+import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 URLS_FILE = os.path.join(BASE_DIR, 'getnodelist.txt')
-OUTPUT_FILE = os.path.abspath(os.path.join(BASE_DIR, '../nodes/nodes.txt')).replace('自动注册', 'auto_register')
+OUTPUT_FILE = os.path.abspath(os.path.join(BASE_DIR, '../nodes/nodes.txt'))
+ACCOUNTS_FILE = os.path.join(BASE_DIR, 'registered_accounts.txt')
 
-EMAIL = 'moneyflysubssr@gmail.com'
-EMAIL_PASSWORD = 'yjqebywkjiokxarx'
-EMAIL_SMTP = 'smtp.gmail.com'
-EMAIL_IMAP = 'imap.gmail.com'
-EMAIL_LOGIN_PASSWORD = 'yjqebywkjiokxarx'  # 用于IMAP登录
-REGISTER_PASSWORD = 'Sikeming001@'
-ACCOUNTS_FILE = os.path.join(BASE_DIR, 'accounts.txt')
+# 统一密码
+UNIFIED_PASSWORD = 'Sikeming001@'
 
 def read_urls(file_path):
     if not os.path.exists(file_path):
@@ -41,107 +34,51 @@ def has_slider_or_cloudflare(html_text):
     keywords = ['slider', 'geetest', 'cloudflare', 'cf-challenge', '验证码']
     return any(kw in html_text.lower() for kw in keywords)
 
-def generate_gmail():
-    return f'auto{int(time.time())%100000}{random.randint(100,999)}@gmail.com'
+def generate_random_gmail():
+    """生成随机Gmail邮箱"""
+    # 生成随机用户名部分
+    username_chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    username = ''.join(random.choice(username_chars) for _ in range(random.randint(8, 12)))
+    
+    # 添加随机数字后缀
+    random_suffix = random.randint(100, 999)
+    
+    # 生成邮箱
+    email = f'{username}{random_suffix}@gmail.com'
+    print(f'[生成邮箱] 随机Gmail邮箱: {email}')
+    return email
 
-def generate_password():
-    chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    return ''.join(random.choice(chars) for _ in range(10))
-
-def fetch_email_code():
-    # 连接 Gmail IMAP
-    mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
-    mail.login(EMAIL, EMAIL_LOGIN_PASSWORD)
-    mail.select('inbox')
-    # 搜索最新邮件
-    result, data = mail.search(None, 'ALL')
-    mail_ids = data[0].split()
-    for eid in reversed(mail_ids[-10:]):  # 只查最近10封
-        result, data = mail.fetch(eid, '(RFC822)')
-        if result != 'OK' or not data or not data[0]:
-            continue
-        # data[0] 结构为 (b'1 (RFC822 {xxx}', bytes)
-        raw_email = data[0][1] if isinstance(data[0], tuple) else data[0]
-        if not isinstance(raw_email, (bytes, bytearray)):
-            continue
-        msg = email_lib.message_from_bytes(raw_email)
-        # 解析主题
-        subject = msg.get('Subject', '')
-        try:
-            dh = decode_header(subject)
-            subject = ''.join([
-                (t.decode(enc or 'utf-8') if isinstance(t, bytes) else t)
-                for t, enc in dh
-            ])
-        except Exception:
-            pass
-        # 只处理含验证码的邮件
-        if '验证码' in subject or 'code' in subject.lower():
-            body = ''
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == 'text/plain':
-                        try:
-                            payload = part.get_payload(decode=True)
-                            if isinstance(payload, bytes):
-                                body = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
-                            else:
-                                body = str(payload)
-                        except Exception:
-                            body = str(part.get_payload())
-                        break
-            else:
-                try:
-                    payload = msg.get_payload(decode=True)
-                    if isinstance(payload, bytes):
-                        body = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
-                    else:
-                        body = str(payload)
-                except Exception:
-                    body = str(msg.get_payload())
-            # 提取6位数字验证码
-            match = re.search(r'(\d{6})', body)
-            if match:
-                return match.group(1)
-    return None
+def save_account_info(website_url, email, password, status):
+    """保存注册的账号信息到文件"""
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    account_info = f'时间: {timestamp} | 网址: {website_url} | 邮箱: {email} | 密码: {password} | 状态: {status}\n'
+    
+    try:
+        with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
+            f.write(account_info)
+        print(f'[保存账号] 账号信息已保存到 {ACCOUNTS_FILE}')
+    except Exception as e:
+        print(f'[保存账号] 保存账号信息失败: {e}')
 
 def auto_register(session, base_url, email, password):
     register_url = base_url + '/auth/register'
+    print(f'[注册] 开始注册: {register_url}')
+    print(f'[注册] 使用邮箱: {email}')
+    print(f'[注册] 使用密码: {password}')
+    
     try:
         page = session.get(register_url)
         html = page.text
         if need_email_code(html):
-            print(f'[register] {register_url} 需要邮箱验证码，尝试自动获取验证码')
-            # 先提交注册请求，触发验证码发送
-            data = {
-                'email': email,
-                'passwd': password,
-                'repasswd': password,
-                'invite_code': '',
-                'email_code': '',
-            }
-            session.post(register_url, data=data)
-            time.sleep(5)  # 等待邮件到达
-            code = fetch_email_code()
-            if not code:
-                print(f'[register] 未能自动获取验证码，跳过')
-                return False
-            data['email_code'] = code
-            resp = session.post(register_url, data=data)
-            print(f'[register] {register_url} 返回: {resp.text}')
-            try:
-                resp_json = resp.json()
-                if resp.status_code == 200 and resp_json.get('ret') == 1:
-                    return True
-            except Exception:
-                pass
-            return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
+            print(f'[注册] {register_url} 需要邮箱验证码，跳过注册')
+            return False
         if has_slider_or_cloudflare(html):
-            print(f'[register] {register_url} 检测到滑动/Cloudflare验证，尝试自动通过（当前直接跳过）')
+            print(f'[注册] {register_url} 检测到滑动/Cloudflare验证，尝试自动通过（当前直接跳过）')
             return False
     except Exception as e:
-        print(f'[register] 获取注册页面失败: {e}')
+        print(f'[注册] 获取注册页面失败: {e}')
         return False
+    
     data = {
         'email': email,
         'passwd': password,
@@ -149,65 +86,122 @@ def auto_register(session, base_url, email, password):
         'invite_code': '',
         'email_code': '',
     }
+    
+    print(f'[注册] 发送注册请求...')
     resp = session.post(register_url, data=data)
-    print(f'[register] {register_url} 返回: {resp.text}')
+    print(f'[注册] {register_url} 返回状态码: {resp.status_code}')
+    print(f'[注册] {register_url} 返回内容: {resp.text}')
+    
+    # 新增：支持JSON返回的注册成功
     try:
         resp_json = resp.json()
         if resp.status_code == 200 and resp_json.get('ret') == 1:
+            print(f'[注册] 注册成功 (JSON响应)')
             return True
     except Exception:
         pass
-    return resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
+    
+    success = resp.status_code == 200 and ('成功' in resp.text or '注册成功' in resp.text)
+    if success:
+        print(f'[注册] 注册成功 (文本响应)')
+    else:
+        print(f'[注册] 注册失败')
+    
+    return success
 
 def auto_login(session, base_url, email, password):
     login_url = base_url + '/auth/login'
+    print(f'[登录] 开始登录: {login_url}')
+    print(f'[登录] 使用邮箱: {email}')
+    
     data = {
         'email': email,
         'passwd': password,
         'remember_me': 'on'
     }
+    
+    print(f'[登录] 发送登录请求...')
     resp = session.post(login_url, data=data)
-    print(f'[login] {login_url} 返回: {resp.text}')
+    print(f'[登录] {login_url} 返回状态码: {resp.status_code}')
+    print(f'[登录] {login_url} 返回内容: {resp.text}')
+    
     try:
         resp_json = resp.json()
-        return resp.status_code == 200 and resp_json.get('ret') == 1
+        success = resp.status_code == 200 and resp_json.get('ret') == 1
+        if success:
+            print(f'[登录] 登录成功 (JSON响应)')
+        else:
+            print(f'[登录] 登录失败 (JSON响应)')
+        return success
     except Exception:
-        return resp.status_code == 200 and ('成功' in resp.text or '登录成功' in resp.text)
+        success = resp.status_code == 200 and ('成功' in resp.text or '登录成功' in resp.text)
+        if success:
+            print(f'[登录] 登录成功 (文本响应)')
+        else:
+            print(f'[登录] 登录失败 (文本响应)')
+        return success
 
 def get_nodes(session, base_url):
     node_url = base_url + '/getnodelist'
+    print(f'[获取节点] 请求节点列表: {node_url}')
+    
     resp = session.get(node_url)
-    print(f'[getnodelist] {node_url} 返回: {resp.text[:100]}...')
+    print(f'[获取节点] {node_url} 返回状态码: {resp.status_code}')
+    print(f'[获取节点] {node_url} 返回内容: {resp.text[:200]}...')
+    
     if resp.status_code == 200:
-        return resp.json()
+        try:
+            return resp.json()
+        except Exception as e:
+            print(f'[获取节点] JSON解析失败: {e}')
+            return None
     return None
 
 def process_node_data(data):
     links = []
     if not data or data.get('ret') != 1 or not data.get('nodeinfo'):
+        print(f'[处理节点] 数据格式无效或ret!=1')
         return links
+    
     nodeinfo = data['nodeinfo']
+    print(f'[处理节点] 开始处理节点数据...')
+    
     if 'nodes_muport' in nodeinfo and nodeinfo['nodes_muport'] and 'user' in nodeinfo['nodes_muport'][0]:
         user_info = nodeinfo['nodes_muport'][0]['user']
     else:
         user_info = nodeinfo['user']
-    uuid = user_info.get('uuid')
-    ss_password = user_info.get('passwd')
-    method = user_info.get('method')
-    if not uuid:
-        print('[警告] user_info 缺少 uuid 字段，跳过该节点')
-        return links
+    
+    uuid = user_info['uuid']
+    ss_password = user_info['passwd']
+    method = user_info['method']
+    
+    print(f'[处理节点] UUID: {uuid}')
+    print(f'[处理节点] SS密码: {ss_password}')
+    print(f'[处理节点] 加密方法: {method}')
+    
+    node_count = 0
     for node in nodeinfo['nodes']:
         raw_node = node['raw_node']
-        if ';port=' in raw_node['server']:
-            server = raw_node['server'].split(';port=')[0]
-            port = raw_node['server'].split('#')[1]
+        node_count += 1
+        print(f'[处理节点] 处理第{node_count}个节点: {raw_node["name"]}')
+        
+        # 解析raw_node.server字段中的参数
+        server_str = raw_node.get('server', '')
+        print(f'[处理节点] 原始server字段: {server_str}')
+        
+        # 首先尝试原有的解析逻辑
+        if ';port=' in server_str:
+            # 原有的SS节点处理逻辑
+            server = server_str.split(';port=')[0]
+            port = server_str.split('#')[1]
             ss_link = f'{method}:{ss_password}@{server}:{port}'
             ss_link_encoded = base64.b64encode(ss_link.encode()).decode()
             final_link = f'ss://{ss_link_encoded}#{raw_node["name"]}'
             links.append(final_link)
-        elif raw_node['server'].count(';') >= 3:
-            server_parts = raw_node['server'].split(';')
+            print(f'[处理节点] 生成SS链接: {final_link[:50]}...')
+        elif server_str.count(';') >= 3:
+            # 原有的VMess节点处理逻辑
+            server_parts = server_str.split(';')
             server = server_parts[0]
             port = server_parts[1]
             aid = server_parts[2] if len(server_parts) > 2 else '64'
@@ -236,71 +230,205 @@ def process_node_data(data):
             vmess_link = base64.b64encode(json.dumps(vmess_config).encode()).decode()
             final_link = f'vmess://{vmess_link}'
             links.append(final_link)
+            print(f'[处理节点] 生成VMess链接: {final_link[:50]}...')
+        else:
+            # 新增：处理特殊格式（包含server=、outside_port=等参数）
+            print(f'[处理节点] 使用新格式解析...')
+            
+            # 提取server地址
+            server = ''
+            if 'server=' in server_str:
+                server = server_str.split('server=')[1].split('|')[0].split(';')[0]
+            else:
+                # 如果找不到server=，尝试其他方式
+                if server_str.count(';') >= 1:
+                    server = server_str.split(';')[0]
+                else:
+                    server = server_str
+            
+            # 提取端口
+            port = ''
+            if 'outside_port=' in server_str:
+                port = server_str.split('outside_port=')[1].split('|')[0]
+            elif ';port=' in server_str:
+                port = server_str.split(';port=')[1].split('#')[0]
+            elif server_str.count(';') >= 2:
+                port = server_str.split(';')[1]
+            else:
+                # 如果都找不到，使用默认端口
+                port = '443'
+            
+            # 提取路径
+            path = ''
+            if 'path=' in server_str:
+                path_part = server_str.split('path=')[1].split('|')[0]
+                path = path_part.replace('\\/', '/')  # 处理转义字符
+            
+            # 提取主机
+            host = ''
+            if 'host=' in server_str:
+                host = server_str.split('host=')[1].split('|')[0]
+            
+            print(f'[处理节点] 新格式解析结果 - 服务器: {server}, 端口: {port}, 路径: {path}, 主机: {host}')
+            
+            # 判断是SS还是VMess
+            if 'ws' in server_str or 'tcp' in server_str or 'http' in server_str:
+                # VMess节点
+                aid = '64'  # 默认值
+                net = 'ws'  # 默认值
+                
+                # 尝试从server字段提取aid和net
+                if server_str.count(';') >= 3:
+                    server_parts = server_str.split(';')
+                    if len(server_parts) > 2:
+                        aid = server_parts[2]
+                    if len(server_parts) > 3:
+                        net = server_parts[3]
+                
+                vmess_config = {
+                    "v": "2",
+                    "ps": raw_node["name"],
+                    "add": server,
+                    "port": port,
+                    "id": uuid,
+                    "aid": str(aid),
+                    "net": net,
+                    "type": "none",
+                    "host": host,
+                    "path": path,
+                    "tls": ""
+                }
+                vmess_link = base64.b64encode(json.dumps(vmess_config).encode()).decode()
+                final_link = f'vmess://{vmess_link}'
+                links.append(final_link)
+                print(f'[处理节点] 生成VMess链接: {final_link[:50]}...')
+            else:
+                # SS节点
+                ss_link = f'{method}:{ss_password}@{server}:{port}'
+                ss_link_encoded = base64.b64encode(ss_link.encode()).decode()
+                final_link = f'ss://{ss_link_encoded}#{raw_node["name"]}'
+                links.append(final_link)
+                print(f'[处理节点] 生成SS链接: {final_link[:50]}...')
+    
+    print(f'[处理节点] 总共处理了 {node_count} 个节点，生成了 {len(links)} 个链接')
     return links
 
 def main():
+    print(f'[主程序] 开始运行自动注册和获取节点程序')
+    print(f'[主程序] 统一密码: {UNIFIED_PASSWORD}')
+    print(f'[主程序] 账号保存文件: {ACCOUNTS_FILE}')
+    print(f'[主程序] 节点保存文件: {OUTPUT_FILE}')
+    
+    # 创建账号记录文件头部
+    if not os.path.exists(ACCOUNTS_FILE):
+        header = f'=== 自动注册账号记录 ===\n'
+        header += f'开始时间: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
+        header += f'统一密码: {UNIFIED_PASSWORD}\n'
+        header += f'格式: 时间 | 网址 | 邮箱 | 密码 | 状态\n'
+        header += f'{"="*50}\n'
+        with open(ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
+            f.write(header)
+        print(f'[主程序] 创建账号记录文件: {ACCOUNTS_FILE}')
+    else:
+        # 如果文件已存在，检查是否有头部信息
+        with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
+            content = f.read()
+        if not content.startswith('=== 自动注册账号记录 ==='):
+            # 如果没有头部信息，添加头部
+            header = f'=== 自动注册账号记录 ===\n'
+            header += f'开始时间: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
+            header += f'统一密码: {UNIFIED_PASSWORD}\n'
+            header += f'格式: 时间 | 网址 | 邮箱 | 密码 | 状态\n'
+            header += f'{"="*50}\n'
+            with open(ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
+                f.write(header + content)
+            print(f'[主程序] 为现有账号记录文件添加头部信息: {ACCOUNTS_FILE}')
+    
     try:
         urls = read_urls(URLS_FILE)
+        print(f'[主程序] 读取到 {len(urls)} 个网址')
+        
         all_links = []
-        for url in urls:
-            print(f'处理: {url}')
+        success_count = 0
+        register_count = 0
+        
+        for i, url in enumerate(urls, 1):
+            print(f'\n[主程序] 处理第 {i}/{len(urls)} 个网址: {url}')
             base_url = url.split('/getnodelist')[0]
             session = requests.Session()
+            
             try:
                 resp = session.get(url, timeout=10)
                 try:
                     data = resp.json()
                 except Exception as e:
                     print(f'[跳过] {url} 返回内容不是JSON: {e}')
+                    save_account_info(url, '', '', f'跳过-非JSON响应: {e}')
                     continue
             except Exception as e:
                 print(f'[跳过] 访问 {url} 失败: {e}')
+                save_account_info(url, '', '', f'跳过-访问失败: {e}')
                 continue
-            # 只在 ret == -1 时注册，否则直接登录
-            email = EMAIL
-            password = REGISTER_PASSWORD
+            
+            # 只在 ret == -1 时注册，否则直接跳过注册
             if data.get('ret') == -1:
-                reg_ok = auto_register(session, base_url, email, password)
+                print(f'[主程序] 需要注册新账号')
+                register_count += 1
+                email = generate_random_gmail()
+                
+                reg_ok = auto_register(session, base_url, email, UNIFIED_PASSWORD)
                 if reg_ok:
-                    login_ok = auto_login(session, base_url, email, password)
+                    print(f'[主程序] 注册成功，尝试登录...')
+                    login_ok = auto_login(session, base_url, email, UNIFIED_PASSWORD)
                     if login_ok:
+                        print(f'[主程序] 登录成功，获取节点数据...')
                         data = get_nodes(session, base_url)
                         if data and data.get('ret') == 1:
                             links = process_node_data(data)
                             all_links.extend(links)
-                            print(f'[注册+登录+获取] {url} 成功，已添加节点')
-                            # 保存账号信息
-                            with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
-                                f.write(f'{base_url} {email} {password}\n')
+                            success_count += 1
+                            print(f'[主程序] 注册+登录+获取成功，添加了 {len(links)} 个节点')
+                            save_account_info(url, email, UNIFIED_PASSWORD, '成功-注册+登录+获取节点')
                         else:
-                            print(f'[失败] {url} 注册和登录成功，但未获取到节点数据')
+                            print(f'[主程序] 注册和登录成功，但未获取到节点数据')
+                            save_account_info(url, email, UNIFIED_PASSWORD, '部分成功-注册+登录成功但无节点数据')
                     else:
-                        print(f'[失败] {url} 注册成功，但登录失败')
+                        print(f'[主程序] 注册成功，但登录失败')
+                        save_account_info(url, email, UNIFIED_PASSWORD, '部分成功-注册成功但登录失败')
                 else:
-                    print(f'[失败] {url} 注册失败或需要验证码/Cloudflare')
+                    print(f'[主程序] 注册失败或需要验证码/Cloudflare')
+                    save_account_info(url, email, UNIFIED_PASSWORD, '失败-注册失败或需要验证')
             else:
-                # 只处理 ret==1 的情况，直接登录
-                login_ok = auto_login(session, base_url, email, password)
-                if login_ok:
-                    data = get_nodes(session, base_url)
-                    if data and data.get('ret') == 1:
-                        links = process_node_data(data)
-                        all_links.extend(links)
-                        print(f'[登录+获取] {url} 成功，已添加节点')
-                        # 保存账号信息
-                        with open(ACCOUNTS_FILE, 'a', encoding='utf-8') as f:
-                            f.write(f'{base_url} {email} {password}\n')
-                    else:
-                        print(f'[失败] {url} 登录成功，但未获取到节点数据')
+                # 只处理 ret==1 的情况
+                if data.get('ret') == 1:
+                    print(f'[主程序] 直接获取节点数据（无需注册）')
+                    links = process_node_data(data)
+                    all_links.extend(links)
+                    success_count += 1
+                    print(f'[主程序] 直接获取成功，添加了 {len(links)} 个节点')
+                    save_account_info(url, '', '', '成功-直接获取节点')
                 else:
-                    print(f'[失败] {url} 登录失败')
+                    print(f'[主程序] 跳过，未返回有效节点(ret!=1)')
+                    save_account_info(url, '', '', f'跳过-ret={data.get("ret")}')
+        
         # 保存所有节点到 nodes/nodes.txt
+        print(f'\n[主程序] 开始保存节点数据...')
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
             f.write('\n'.join(all_links))
-        print(f'已保存 {len(all_links)} 条节点到 {OUTPUT_FILE}')
+        
+        # 输出统计信息
+        print(f'\n[主程序] ===== 运行统计 =====')
+        print(f'[主程序] 总处理网址数: {len(urls)}')
+        print(f'[主程序] 尝试注册数: {register_count}')
+        print(f'[主程序] 成功获取节点数: {success_count}')
+        print(f'[主程序] 总获取节点数: {len(all_links)}')
+        print(f'[主程序] 节点保存位置: {OUTPUT_FILE}')
+        print(f'[主程序] 账号记录位置: {ACCOUNTS_FILE}')
+        print(f'[主程序] ===================')
+        
     except Exception as e:
-        print(f'运行出错: {e}')
+        print(f'[主程序] 运行出错: {e}')
         # 不再 exit(1)，而是继续
 
 if __name__ == '__main__':
