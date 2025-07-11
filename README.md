@@ -1,40 +1,110 @@
-# getfreenodes
+# 自动注册节点获取工具
 
-本项目实现了自动化注册、登录、节点信息采集与协议组合，并自动同步到 GitHub。
+## 功能特点
 
-## 功能简介
-- 自动读取 `auto_register/getnodelist.txt` 中的节点获取网址
-- 检测节点接口返回值，自动注册账号（优先 Gmail，遇到邮箱/滑动/Cloudflare 验证自动跳过）
-- 登录并获取节点数据，自动组合成 SS/VMess 等协议链接
-- 节点信息输出到 `nodes/nodes.txt`
-- 所有代码和节点信息自动同步到本仓库
-- 支持 GitHub Actions 定时自动运行与推送
+### 🔧 主要功能
+- **自动注册**: 使用随机Gmail邮箱自动注册账号
+- **统一密码**: 所有注册账号使用统一密码 `Sikeming001@`
+- **节点获取**: 自动获取SS/VMess节点链接
+- **详细记录**: 完整的操作日志和账号记录
 
-## 目录结构
+### 📝 输出文件
+1. **节点文件**: `../nodes/nodes.txt` - 保存所有获取的节点链接
+2. **账号记录**: `registered_accounts.txt` - 保存所有注册的账号信息
+
+### 📊 账号记录格式
 ```
-auto_register/
-  get_all_nodes.py         # 主脚本，自动注册/登录/采集/组合节点
-  getnodelist.txt          # 节点获取接口列表（每行一个）
-  requirements.txt         # 依赖
-.github/
-  workflows/
-    update_nodes.yml       # GitHub Actions 自动化配置
-nodes/
-  nodes.txt                # 自动生成的节点信息
-README.md                  # 项目说明
+=== 自动注册账号记录 ===
+开始时间: 2024-01-01 12:00:00
+统一密码: Sikeming001@
+格式: 时间 | 网址 | 邮箱 | 密码 | 状态
+==================================================
+时间: 2024-01-01 12:01:00 | 网址: https://example.com/getnodelist | 邮箱: abc123456@gmail.com | 密码: Sikeming001@ | 状态: 成功-注册+登录+获取节点
 ```
 
 ## 使用方法
-1. 在 `auto_register/getnodelist.txt` 填写节点获取接口，每行一个
-2. 运行 `python auto_register/get_all_nodes.py` 自动采集节点
-3. 节点信息会输出到 `nodes/nodes.txt`
-4. 通过 `git add . && git commit -m "xxx" && git push` 可同步所有更改到 GitHub
-5. GitHub Actions 会定时自动运行并推送最新节点
 
-## 自动化说明
-- Actions 每 6 小时自动运行一次，采集并推送节点信息
-- 注册时遇到邮箱验证码/滑动/Cloudflare 验证会自动跳过该站点
-- 支持多站点批量采集
+### 1. 安装依赖
+```bash
+pip install -r requirements.txt
+```
 
-## 免责声明
-本项目仅供学习与交流，严禁用于任何非法用途！ 
+### 2. 配置网址列表
+编辑 `getnodelist.txt` 文件，每行一个节点接口地址：
+```
+https://site1.com/getnodelist
+https://site2.com/getnodelist
+https://site3.com/getnodelist
+```
+
+### 3. 运行程序
+```bash
+python get_all_nodes.py
+```
+
+### 4. 测试功能
+```bash
+python test_registration.py
+```
+
+## 功能说明
+
+### 🎯 随机Gmail邮箱生成
+- 生成8-12位随机用户名
+- 添加100-999的随机数字后缀
+- 格式: `username123@gmail.com`
+
+### 🔐 统一密码
+- 所有注册账号使用相同密码: `Sikeming001@`
+- 包含大小写字母、数字和特殊字符
+
+### 📋 详细输出记录
+程序运行时会输出详细的处理过程：
+- `[主程序]` - 主要流程控制
+- `[注册]` - 注册过程详情
+- `[登录]` - 登录过程详情
+- `[获取节点]` - 节点获取详情
+- `[处理节点]` - 节点数据处理详情
+- `[保存账号]` - 账号信息保存详情
+
+### 📈 统计信息
+程序结束时会显示完整的统计信息：
+- 总处理网址数
+- 尝试注册数
+- 成功获取节点数
+- 总获取节点数
+
+## 状态说明
+
+### 成功状态
+- `成功-注册+登录+获取节点` - 完整流程成功
+- `成功-直接获取节点` - 无需注册直接获取成功
+
+### 部分成功状态
+- `部分成功-注册+登录成功但无节点数据` - 注册登录成功但无节点
+- `部分成功-注册成功但登录失败` - 注册成功但登录失败
+
+### 失败状态
+- `失败-注册失败或需要验证` - 注册失败或需要验证码
+- `跳过-非JSON响应` - 接口返回非JSON格式
+- `跳过-访问失败` - 网络访问失败
+- `跳过-ret=0` - 接口返回无效状态
+
+## 注意事项
+
+1. **网络连接**: 确保网络连接正常
+2. **接口格式**: 确保接口返回正确的JSON格式
+3. **验证码**: 部分网站可能需要验证码，程序会自动跳过
+4. **频率限制**: 建议适当控制运行频率，避免被限制
+
+## 文件结构
+
+```
+auto_register/
+├── get_all_nodes.py          # 主程序
+├── test_registration.py      # 测试程序
+├── getnodelist.txt          # 网址列表
+├── requirements.txt          # 依赖包
+├── registered_accounts.txt   # 账号记录 (自动生成)
+└── README.md               # 说明文档
+``` 
