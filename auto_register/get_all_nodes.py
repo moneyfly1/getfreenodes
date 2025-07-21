@@ -389,6 +389,9 @@ def main():
     print(f'[主程序] 账号保存文件: {ACCOUNTS_FILE}')
     print(f'[主程序] 节点保存文件: {OUTPUT_FILE}')
     
+    # 先清空账号文件
+    with open(ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
+        pass
     # 创建账号记录文件头部
     if not os.path.exists(ACCOUNTS_FILE):
         header = f'=== 自动注册账号记录 ===\n'
